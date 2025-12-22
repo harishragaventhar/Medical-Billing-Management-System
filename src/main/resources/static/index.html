@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Billing Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="p-6">
+
+<div class="max-w-4xl mx-auto">
+    <header class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-blue-800">MediBill Core</h1>
+            <p class="text-gray-600">Claims Processing & Liability Engine</p>
+        </div>
+        <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-full font-semibold">
+            <i class="fas fa-database mr-2"></i>Connected to DB: Claims
+        </div>
+    </header>
+
+    <!-- STEP 3: OCR SECTION -->
+    <div class="card p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
+            <i class="fas fa-id-card text-blue-600 mr-2"></i>Step 1: Patient Intake (OCR)
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition">
+                <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                <p class="text-sm text-gray-500 mb-4">Upload Insurance Card Image</p>
+                <input type="file" id="cardInput" class="hidden" onchange="handleFileUpload()">
+                <button onclick="document.getElementById('cardInput').click()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Select File
+                </button>
+                <!-- Loading Spinner -->
+                <div id="loadingSpinner" class="hidden mt-4 text-blue-600">
+                    <i class="fas fa-spinner fa-spin"></i> Processing Image...
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Patient Name</label>
+                    <input type="text" id="patientName" class="w-full p-2 border rounded bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="Waiting for scan..." readonly>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Policy Number</label>
+                    <input type="text" id="insurancePolicyNumber" class="w-full p-2 border rounded bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500" placeholder="Waiting for scan..." readonly>
+                </div>
+                <div id="ocrStatus" class="text-sm text-green-600 font-semibold hidden">
+                    <i class="fas fa-check-circle"></i> Scan Complete (Editable)
+                </div>
+                <div id="ocrError" class="text-sm text-red-600 font-semibold hidden">
+                    <i class="fas fa-exclamation-triangle"></i> Scan Failed
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 2: LIABILITY SECTION -->
+    <div class="card p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
+            <i class="fas fa-calculator text-green-600 mr-2"></i>Step 2: Adjudication (Liability Logic)
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Billed Amount ($)</label>
+                <input type="number" id="billedAmount" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" placeholder="0.00" oninput="calculateLiability()">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Allowed Amount ($)</label>
+                <input type="number" id="allowedAmount" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" placeholder="0.00" oninput="calculateLiability()">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700">Insurance Paid ($)</label>
+                <input type="number" id="insurancePaidAmount" class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" placeholder="0.00" oninput="calculateLiability()">
+            </div>
+        </div>
+
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Liability Distribution</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div class="p-3 bg-white rounded shadow-sm border-l-4 border-yellow-400">
+                    <p class="text-xs text-gray-500">writeOff</p>
+                    <p class="text-xl font-bold text-gray-800" id="writeOffDisplay">$0.00</p>
+                </div>
+                <div class="p-3 bg-white rounded shadow-sm border-l-4 border-green-500">
+                    <p class="text-xs text-gray-500">insurancePaidAmount</p>
+                    <p class="text-xl font-bold text-gray-800" id="insurancePaidDisplay">$0.00</p>
+                </div>
+                <div class="p-3 bg-white rounded shadow-sm border-l-4 border-red-500">
+                    <p class="text-xs text-gray-500">patientResponsibility</p>
+                    <p class="text-xl font-bold text-red-600" id="patientRespDisplay">$0.00</p>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t flex justify-between items-center">
+                <span class="text-gray-600">DB Status: <span id="currentStatus" class="font-bold">DRAFT</span></span>
+                <button id="submitBtn" onclick="submitClaim()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-bold shadow">
+                    Submit to Database
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- STEP 3: REAL OCR LOGIC ---
+    async function handleFileUpload() {
+        const fileInput = document.getElementById('cardInput');
+        const file = fileInput.files[0];
+
+        if (!file) return;
+
+        document.getElementById('loadingSpinner').classList.remove('hidden');
+        document.getElementById('ocrStatus').classList.add('hidden');
+        document.getElementById('ocrError').classList.add('hidden');
+        document.getElementById('patientName').value = "Scanning...";
+        document.getElementById('insurancePolicyNumber').value = "Scanning...";
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Call the Real Backend Endpoint
+            const response = await fetch('/api/claims/upload-card', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                 const errorText = await response.text();
+                 throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+
+            document.getElementById('patientName').value = data.patientName || "";
+            document.getElementById('insurancePolicyNumber').value = data.insurancePolicyNumber || "";
+
+            // UNLOCK FIELDS for manual correction
+            document.getElementById('patientName').readOnly = false;
+            document.getElementById('insurancePolicyNumber').readOnly = false;
+            document.getElementById('patientName').classList.replace('bg-gray-50', 'bg-white');
+            document.getElementById('insurancePolicyNumber').classList.replace('bg-gray-50', 'bg-white');
+
+            document.getElementById('ocrStatus').classList.remove('hidden');
+
+        } catch (error) {
+            console.error("OCR Error:", error);
+            document.getElementById('ocrError').innerText = "Scan Failed: " + error.message;
+            document.getElementById('ocrError').classList.remove('hidden');
+            document.getElementById('patientName').value = "Error";
+            document.getElementById('insurancePolicyNumber').value = "Error";
+        } finally {
+            document.getElementById('loadingSpinner').classList.add('hidden');
+            fileInput.value = '';
+        }
+    }
+
+    // --- STEP 2: LIABILITY LOGIC ---
+    function calculateLiability() {
+        const billed = parseFloat(document.getElementById('billedAmount').value) || 0;
+        const allowed = parseFloat(document.getElementById('allowedAmount').value) || 0;
+        const paid = parseFloat(document.getElementById('insurancePaidAmount').value) || 0;
+
+        let writeOff = billed - allowed;
+        if (writeOff < 0) writeOff = 0;
+
+        let patientResp = allowed - paid;
+        if (patientResp < 0) patientResp = 0;
+
+        document.getElementById('writeOffDisplay').innerText = formatCurrency(writeOff);
+        document.getElementById('insurancePaidDisplay').innerText = formatCurrency(paid);
+        document.getElementById('patientRespDisplay').innerText = formatCurrency(patientResp);
+
+        const statusEl = document.getElementById('currentStatus');
+        if (patientResp > 0) {
+            statusEl.innerText = "PREVIEW: BILLED_TO_PATIENT";
+            statusEl.className = "font-bold text-red-600";
+        } else if (paid > 0) {
+            statusEl.innerText = "PREVIEW: PAID_IN_FULL";
+            statusEl.className = "font-bold text-green-600";
+        } else {
+            statusEl.innerText = "DRAFT";
+            statusEl.className = "font-bold text-gray-600";
+        }
+    }
+
+    function formatCurrency(num) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+    }
+
+    // --- REAL DB CONNECTION ---
+    async function submitClaim() {
+        const id = 1;
+        const paid = document.getElementById('insurancePaidAmount').value || 0;
+        const allowed = document.getElementById('allowedAmount').value || 0;
+
+        const btn = document.getElementById('submitBtn');
+        const originalText = btn.innerText;
+        btn.innerText = "Saving...";
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/claims/${id}/process-payment?insurancePaid=${paid}&allowedAmount=${allowed}`, {
+                method: 'PUT'
+            });
+
+            if (!response.ok) throw new Error("Failed to save to DB");
+
+            const data = await response.json();
+
+            const statusEl = document.getElementById('currentStatus');
+            statusEl.innerText = "DB SAVED: " + (data.currentStatus || "UNKNOWN");
+            statusEl.className = "font-bold text-blue-600";
+
+            alert("Success! Claim saved to Database.");
+
+        } catch (error) {
+            alert("Error saving to Database: " + error.message);
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
